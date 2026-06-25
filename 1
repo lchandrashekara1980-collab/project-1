@@ -1,0 +1,430 @@
+import { useState, useRef } from "react";
+
+const DOCTOR_NAME = "Dr. SHASHANK C";
+const SHOP_NAME = "SHASHANK MEDICAL & GENERAL STORES";
+const SHOP_ADDRESS = "Suman PU College Campus, Karnataka, India";
+const SHOP_PHONE = "+91 98765 43210";
+const LICENSE_NO = "KA-MED-2024-00871";
+
+const SYMPTOM_LIST = [
+  "Fever","Cold / Runny Nose","Cough (Dry)","Cough (Wet/Productive)",
+  "Headache","Migraine","Sore Throat","Body Pain / Myalgia",
+  "Stomach Pain / Abdominal Pain","Nausea / Vomiting","Diarrhoea",
+  "Constipation","Acidity / Heartburn","Bloating / Gas",
+  "Skin Rash / Itching","Allergic Reaction","Eye Redness / Conjunctivitis",
+  "Ear Pain","Toothache","Back Pain","Knee / Joint Pain",
+  "Weakness / Fatigue","Dizziness","High Blood Pressure (BP)",
+  "Diabetes (Blood Sugar High)","Chest Pain","Shortness of Breath",
+  "Urinary Burning / UTI","Anxiety / Stress","Insomnia / Poor Sleep",
+  "Wound / Cut","Mouth Ulcer","Dandruff / Hair Fall","Anaemia / Low Haemoglobin",
+];
+
+const TIMING_COLORS = { morning: "#F59E0B", afternoon: "#3B82F6", night: "#6366F1" };
+
+export default function MedicalShop() {
+  const [patientName, setPatientName] = useState("");
+  const [patientAge, setPatientAge] = useState("");
+  const [patientGender, setPatientGender] = useState("Male");
+  const [symptoms, setSymptoms] = useState([]);
+  const [selectedSymptom, setSelectedSymptom] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const printRef = useRef();
+
+  const addSymptom = () => {
+    if (selectedSymptom && !symptoms.includes(selectedSymptom)) {
+      setSymptoms([...symptoms, selectedSymptom]);
+      setSelectedSymptom("");
+    }
+  };
+
+  const removeSymptom = (s) => setSymptoms(symptoms.filter((x) => x !== s));
+
+  const handleGetMedicines = async () => {
+    if (!symptoms.length) { setError("Please add at least one symptom."); return; }
+    if (!patientName.trim()) { setError("Please enter patient name."); return; }
+    setError("");
+    setLoading(true);
+    setResult(null);
+    try {
+      const prompt = `You are an expert Indian pharmacist/medical assistant. A patient presents with the following symptoms: ${symptoms.join(", ")}.
+
+Recommend the most appropriate OTC (over-the-counter) medicines available in India. Return ONLY a valid JSON object (no markdown, no backticks, no explanation) in exactly this format:
+
+{
+  "medicines": [
+    {
+      "name": "Generic Medicine Name + Strength",
+      "brand": "Popular Brand Name in India",
+      "company": "Pharmaceutical Company Name",
+      "indication": "What this medicine treats",
+      "morning": true or false,
+      "afternoon": true or false,
+      "night": true or false,
+      "food_timing": "before" or "after",
+      "duration_days": number,
+      "quantity_strips": number,
+      "tablets_per_strip": 10,
+      "price_per_strip": number in INR (realistic current Indian MRP),
+      "total_price": number in INR
+    }
+  ],
+  "advice": "Short general advice for the patient",
+  "warning": "When to see a doctor immediately"
+}
+
+Rules:
+- Recommend 2-4 medicines appropriate for the combined symptoms
+- Use real Indian brand names (e.g. Dolo, Crocin, Sinarest, Pan, Digene, etc.)
+- Use realistic 2024-2025 Indian MRP prices
+- Quantities should be practical (3-7 day supply typically)
+- Respond ONLY with the JSON object, nothing else`;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      const data = await response.json();
+      const text = data.content?.map((i) => i.text || "").join("") || "";
+      const clean = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      setResult(parsed);
+    } catch (e) {
+      setError("Failed to fetch recommendations. Please try again.");
+    }
+    setLoading(false);
+  };
+
+  const handlePrint = () => {
+    const printContent = printRef.current.innerHTML;
+    const win = window.open("", "_blank");
+    win.document.write(`
+      <html><head><title>Prescription - ${patientName}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #111; }
+        .rx-wrap { width: 720px; margin: 0 auto; padding: 20px; }
+        .rx-header { text-align: center; border-bottom: 3px double #1a3a5c; padding-bottom: 10px; margin-bottom: 12px; }
+        .rx-header h1 { font-size: 22px; color: #1a3a5c; font-weight: 900; letter-spacing: 1px; }
+        .rx-header p { font-size: 11px; color: #444; margin-top: 2px; }
+        .rx-header .lic { font-size: 10px; color: #888; margin-top: 4px; }
+        .rx-meta { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 11px; }
+        .rx-meta div { background: #f0f7ff; border: 1px solid #d0e8ff; padding: 6px 10px; border-radius: 4px; }
+        .rx-meta label { font-weight: bold; color: #1a3a5c; }
+        .rx-symbol { font-size: 36px; font-weight: 900; color: #1a3a5c; font-style: italic; margin: 8px 0 4px 0; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 11px; }
+        th { background: #1a3a5c; color: white; padding: 7px 6px; text-align: center; }
+        td { padding: 6px 6px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+        tr:nth-child(even) td { background: #f8faff; }
+        .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+        .dot-yes { background: #16a34a; }
+        .dot-no { background: #e5e7eb; }
+        .advice-box { background: #fffbeb; border: 1px solid #fcd34d; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 11px; }
+        .warn-box { background: #fff1f2; border: 1px solid #fca5a5; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 11px; }
+        .bill-box { border: 2px solid #1a3a5c; border-radius: 4px; padding: 10px; margin-bottom: 10px; }
+        .bill-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; }
+        .bill-total { font-weight: bold; font-size: 14px; color: #1a3a5c; border-top: 2px solid #1a3a5c; margin-top: 6px; padding-top: 6px; }
+        .sign-row { display: flex; justify-content: space-between; margin-top: 16px; font-size: 11px; }
+        .sign-block { text-align: center; }
+        .sign-line { border-top: 1px solid #333; width: 160px; margin: 30px auto 4px auto; }
+        .footer-note { text-align: center; font-size: 9px; color: #888; margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 6px; }
+        .tag { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+        .before { background: #dbeafe; color: #1d4ed8; }
+        .after { background: #dcfce7; color: #15803d; }
+      </style>
+      </head><body><div class="rx-wrap">${printContent}</div></body></html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
+  const totalAmount = result?.medicines?.reduce((s, m) => s + (m.total_price || 0), 0) || 0;
+  const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const rxNo = `RX${Date.now().toString().slice(-7)}`;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #e8f4fd 0%, #f0fdf4 100%)", fontFamily: "'Segoe UI', sans-serif", padding: "20px" }}>
+      {/* Header */}
+      <div style={{ maxWidth: 860, margin: "0 auto" }}>
+        <div style={{ background: "linear-gradient(135deg, #1a3a5c 0%, #0f2342 100%)", borderRadius: 16, padding: "20px 28px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16, boxShadow: "0 8px 32px rgba(26,58,92,0.3)" }}>
+          <div style={{ fontSize: 48 }}>🏥</div>
+          <div>
+            <div style={{ color: "#fff", fontSize: 22, fontWeight: 900, letterSpacing: 1 }}>{SHOP_NAME}</div>
+            <div style={{ color: "#93c5fd", fontSize: 12, marginTop: 2 }}>{SHOP_ADDRESS} &nbsp;|&nbsp; {SHOP_PHONE}</div>
+            <div style={{ color: "#6ee7b7", fontSize: 11, marginTop: 2 }}>Lic No: {LICENSE_NO} &nbsp;|&nbsp; GST: 29XXXXX1234X1ZX</div>
+          </div>
+          <div style={{ marginLeft: "auto", textAlign: "right" }}>
+            <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 14px" }}>
+              <div style={{ color: "#fbbf24", fontWeight: 700, fontSize: 13 }}>💊 Prescription System</div>
+              <div style={{ color: "#e2e8f0", fontSize: 11, marginTop: 2 }}>{DOCTOR_NAME}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Patient Info */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: "18px 22px", marginBottom: 18, boxShadow: "0 2px 12px rgba(0,0,0,0.07)", border: "1px solid #e2e8f0" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1a3a5c", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+            <span>👤</span> Patient Information
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 160px", gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Patient Name *</label>
+              <input value={patientName} onChange={e => setPatientName(e.target.value)} placeholder="Enter patient name" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Age</label>
+              <input value={patientAge} onChange={e => setPatientAge(e.target.value)} placeholder="Years" type="number" min="1" max="120" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Gender</label>
+              <select value={patientGender} onChange={e => setPatientGender(e.target.value)} style={inputStyle}>
+                <option>Male</option><option>Female</option><option>Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Symptoms */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: "18px 22px", marginBottom: 18, boxShadow: "0 2px 12px rgba(0,0,0,0.07)", border: "1px solid #e2e8f0" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1a3a5c", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+            <span>🩺</span> Symptoms
+          </div>
+
+          {/* Added symptoms chips */}
+          {symptoms.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {symptoms.map(s => (
+                <span key={s} style={{ background: "#dbeafe", color: "#1d4ed8", borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                  {s}
+                  <span onClick={() => removeSymptom(s)} style={{ cursor: "pointer", color: "#1d4ed8", fontWeight: 900, fontSize: 14, lineHeight: 1 }}>×</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Add symptom row */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <select value={selectedSymptom} onChange={e => setSelectedSymptom(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+              <option value="">— Select a symptom —</option>
+              {SYMPTOM_LIST.filter(s => !symptoms.includes(s)).map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <button onClick={addSymptom} disabled={!selectedSymptom} style={{
+              background: selectedSymptom ? "linear-gradient(135deg, #16a34a, #15803d)" : "#e5e7eb",
+              color: selectedSymptom ? "#fff" : "#9ca3af",
+              border: "none", borderRadius: 8, padding: "0 18px", fontWeight: 700,
+              fontSize: 13, cursor: selectedSymptom ? "pointer" : "not-allowed",
+              display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+              boxShadow: selectedSymptom ? "0 2px 8px rgba(22,163,74,0.3)" : "none",
+              transition: "all 0.2s",
+            }}>
+              <span style={{ fontSize: 16 }}>+</span> Add Symptom
+            </button>
+          </div>
+
+          {error && <div style={{ marginTop: 10, color: "#dc2626", fontSize: 12, background: "#fff1f2", padding: "8px 12px", borderRadius: 6, border: "1px solid #fca5a5" }}>⚠️ {error}</div>}
+        </div>
+
+        {/* Get Medicines Button */}
+        <button
+          onClick={handleGetMedicines}
+          disabled={loading}
+          style={{
+            width: "100%", padding: "14px", borderRadius: 12, border: "none",
+            background: loading ? "#94a3b8" : "linear-gradient(135deg, #1a3a5c 0%, #2563eb 100%)",
+            color: "#fff", fontSize: 15, fontWeight: 800, cursor: loading ? "not-allowed" : "pointer",
+            letterSpacing: 0.5, boxShadow: "0 4px 16px rgba(26,58,92,0.3)", marginBottom: 20,
+            transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+          }}
+        >
+          {loading ? (<><span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⚙️</span> Analysing Symptoms & Fetching Medicines...</>) : "💊 Get Medicine Recommendation"}
+        </button>
+
+        {/* Result */}
+        {result && (
+          <div>
+            {/* Medicine Cards */}
+            <div style={{ display: "grid", gap: 12, marginBottom: 18 }}>
+              {result.medicines?.map((med, i) => (
+                <div key={i} style={{ background: "#fff", borderRadius: 14, padding: "16px 20px", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", border: "1px solid #e2e8f0", display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ flex: "2 1 220px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ background: "#1a3a5c", color: "#fff", borderRadius: "50%", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{i + 1}</span>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: "#1a3a5c" }}>{med.brand}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>{med.name}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>🏭 {med.company}</div>
+                    <div style={{ fontSize: 11, color: "#059669", marginTop: 4, background: "#d1fae5", display: "inline-block", padding: "2px 8px", borderRadius: 4 }}>{med.indication}</div>
+                  </div>
+                  <div style={{ flex: "1 1 160px" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 6 }}>DOSAGE SCHEDULE</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[["🌅", "Mry", "morning", "#fef3c7"], ["☀️", "Aftn", "afternoon", "#dbeafe"], ["🌙", "Night", "night", "#ede9fe"]].map(([icon, label, key, bg]) => (
+                        <div key={key} style={{ textAlign: "center", background: med[key] ? bg : "#f9fafb", borderRadius: 8, padding: "6px 10px", border: `1px solid ${med[key] ? "#e5e7eb" : "#f1f5f9"}`, opacity: med[key] ? 1 : 0.4 }}>
+                          <div style={{ fontSize: 14 }}>{icon}</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: "#374151", marginTop: 2 }}>{label}</div>
+                          <div style={{ fontSize: 10, fontWeight: 900, color: med[key] ? "#16a34a" : "#9ca3af" }}>{med[key] ? "✓" : "—"}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11 }}>
+                      <span style={{ background: med.food_timing === "before" ? "#dbeafe" : "#dcfce7", color: med.food_timing === "before" ? "#1d4ed8" : "#15803d", padding: "2px 8px", borderRadius: 4, fontWeight: 600 }}>
+                        {med.food_timing === "before" ? "🍽️ Before Food" : "🍽️ After Food"}
+                      </span>
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "#64748b" }}>• {med.duration_days} days</span>
+                    </div>
+                  </div>
+                  <div style={{ flex: "1 1 130px", textAlign: "right" }}>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>Qty: {med.quantity_strips} strip{med.quantity_strips > 1 ? "s" : ""} × {med.tablets_per_strip} tab</div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>MRP: ₹{med.price_per_strip}/strip</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: "#1a3a5c", marginTop: 6 }}>₹{med.total_price?.toFixed(2)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Advice */}
+            {result.advice && (
+              <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 10, padding: "12px 16px", marginBottom: 10, fontSize: 13 }}>
+                <strong style={{ color: "#92400e" }}>💡 Advice: </strong><span style={{ color: "#78350f" }}>{result.advice}</span>
+              </div>
+            )}
+            {result.warning && (
+              <div style={{ background: "#fff1f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13 }}>
+                <strong style={{ color: "#991b1b" }}>⚠️ See Doctor If: </strong><span style={{ color: "#7f1d1d" }}>{result.warning}</span>
+              </div>
+            )}
+
+            {/* Print Button */}
+            <button onClick={handlePrint} style={{
+              width: "100%", padding: "12px", borderRadius: 12, border: "none",
+              background: "linear-gradient(135deg, #16a34a, #15803d)",
+              color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(22,163,74,0.35)", marginBottom: 20,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+            }}>
+              🖨️ Print Prescription & Bill
+            </button>
+
+            {/* Hidden Print Area */}
+            <div ref={printRef} style={{ display: "none" }}>
+              <div className="rx-header">
+                <h1>🏥 {SHOP_NAME}</h1>
+                <p>{SHOP_ADDRESS} &nbsp;|&nbsp; {SHOP_PHONE}</p>
+                <p className="lic">Lic No: {LICENSE_NO} &nbsp;|&nbsp; GST: 29XXXXX1234X1ZX</p>
+              </div>
+
+              <div className="rx-meta">
+                <div><label>Rx No: </label>{rxNo}</div>
+                <div><label>Date: </label>{today}</div>
+                <div><label>Patient: </label>{patientName} | {patientAge ? `${patientAge} yrs` : ""} | {patientGender}</div>
+                <div><label>Doctor: </label>{DOCTOR_NAME}</div>
+              </div>
+
+              <div className="rx-meta" style={{ marginBottom: 8 }}>
+                <div style={{ flex: 1 }}><label>Symptoms: </label>{symptoms.join(", ")}</div>
+              </div>
+
+              <div className="rx-symbol">℞</div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 28 }}>#</th>
+                    <th style={{ textAlign: "left" }}>Medicine (Brand)</th>
+                    <th style={{ textAlign: "left" }}>Company</th>
+                    <th>Mry</th>
+                    <th>Aftn</th>
+                    <th>Night</th>
+                    <th>Food</th>
+                    <th>Days</th>
+                    <th>Qty</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.medicines?.map((med, i) => (
+                    <tr key={i}>
+                      <td style={{ textAlign: "center" }}>{i + 1}</td>
+                      <td>
+                        <strong>{med.brand}</strong><br />
+                        <span style={{ fontSize: 10, color: "#555" }}>{med.name}</span>
+                      </td>
+                      <td style={{ fontSize: 10 }}>{med.company}</td>
+                      <td style={{ textAlign: "center" }}><span className={`dot dot-${med.morning ? "yes" : "no"}`}></span></td>
+                      <td style={{ textAlign: "center" }}><span className={`dot dot-${med.afternoon ? "yes" : "no"}`}></span></td>
+                      <td style={{ textAlign: "center" }}><span className={`dot dot-${med.night ? "yes" : "no"}`}></span></td>
+                      <td style={{ textAlign: "center" }}><span className={med.food_timing === "before" ? "tag before" : "tag after"}>{med.food_timing === "before" ? "BEF" : "AFT"}</span></td>
+                      <td style={{ textAlign: "center" }}>{med.duration_days}d</td>
+                      <td style={{ textAlign: "center" }}>{med.quantity_strips} × {med.tablets_per_strip}</td>
+                      <td style={{ textAlign: "right" }}>₹{med.total_price?.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {result.advice && <div className="advice-box"><strong>Advice:</strong> {result.advice}</div>}
+              {result.warning && <div className="warn-box"><strong>⚠ Consult doctor if:</strong> {result.warning}</div>}
+
+              <div className="bill-box">
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#1a3a5c", marginBottom: 6 }}>BILL SUMMARY</div>
+                {result.medicines?.map((med, i) => (
+                  <div className="bill-row" key={i}>
+                    <span>{med.brand} ({med.quantity_strips} strips × ₹{med.price_per_strip})</span>
+                    <span>₹{med.total_price?.toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="bill-row bill-total">
+                  <span>TOTAL AMOUNT</span>
+                  <span>₹{totalAmount.toFixed(2)}</span>
+                </div>
+                <div className="bill-row" style={{ fontSize: 10, color: "#555", marginTop: 4 }}>
+                  <span>Prices as per MRP. GST included.</span>
+                </div>
+              </div>
+
+              <div className="sign-row">
+                <div className="sign-block">
+                  <div className="sign-line"></div>
+                  <div>Patient / Attendant Signature</div>
+                </div>
+                <div className="sign-block">
+                  <div className="sign-line"></div>
+                  <div>{DOCTOR_NAME}</div>
+                  <div style={{ fontSize: 9, color: "#555" }}>Pharmacist / Prescriber</div>
+                </div>
+              </div>
+
+              <div className="footer-note">
+                This prescription is computer-generated. Valid for 30 days from issue date. 
+                Medicines dispensed as prescribed by {DOCTOR_NAME}. Keep medicines away from children.
+                For emergencies call: {SHOP_PHONE}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        select:focus, input:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
+        button:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+      `}</style>
+    </div>
+  );
+}
+
+const labelStyle = { display: "block", fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 4 };
+const inputStyle = {
+  width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #d1d5db",
+  fontSize: 13, background: "#f9fafb", color: "#111827", transition: "border-color 0.2s",
+};
